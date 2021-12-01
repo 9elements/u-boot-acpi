@@ -6,6 +6,7 @@
  */
 
 #define LOG_CATEGORY LOGC_ACPI
+#define LOG_DEBUG
 
 #include <log.h>
 #include <malloc.h>
