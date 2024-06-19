@@ -143,11 +143,10 @@ static int do_bootefi(struct cmd_tbl *cmdtp, int flag, int argc,
 	if (argc > 2) {
 		uintptr_t fdt_addr;
 
-		ret = efi_install_fdt(fdt);
-		if (ret == EFI_INVALID_PARAMETER)
-			return CMD_RET_USAGE;
-		else if (ret != EFI_SUCCESS)
-			return CMD_RET_FAILURE;
+		fdt_addr = hextoul(argv[2], NULL);
+		fdt = map_sysmem(fdt_addr, 0);
+	} else {
+		fdt = EFI_FDT_USE_INTERNAL;
 	}
 
 	if (IS_ENABLED(CONFIG_CMD_BOOTEFI_BOOTMGR) &&

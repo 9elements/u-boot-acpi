@@ -13,7 +13,6 @@
 #include <fdt_support.h>
 #include <fdt_simplefb.h>
 #include <init.h>
-#include <lcd.h>
 #include <log.h>
 #include <memalign.h>
 #include <mmc.h>
@@ -615,6 +614,7 @@ int last_stage_init(void)
 
 	return 0;
 }
+EVENT_SPY_SIMPLE(EVT_LAST_STAGE_INIT, last_stage_init);
 
 static int rpi_write_facp(struct acpi_ctx *ctx, const struct acpi_writer *entry)
 {
@@ -639,10 +639,8 @@ static int rpi_write_facp(struct acpi_ctx *ctx, const struct acpi_writer *entry)
 	fadt->arm_boot_arch = ACPI_ARM_PSCI_COMPLIANT;
 	fadt->minor_revision = 3;
 
-	fadt->x_firmware_ctl_l = (ulong)ctx->facs;
-	fadt->x_firmware_ctl_h = (ulong)ctx->facs >> 32;
-	fadt->x_dsdt_l = (ulong)ctx->dsdt;
-	fadt->x_dsdt_h = (ulong)ctx->dsdt >> 32;
+	fadt->x_firmware_ctrl = (ulong)ctx->facs;
+	fadt->x_dsdt = (ulong)ctx->dsdt;
 
 	header->checksum = table_compute_checksum(fadt, header->length);
 
