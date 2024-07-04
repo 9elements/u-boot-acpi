@@ -4,6 +4,7 @@
 #define __ASM_ACPI_TABLE_H__
 
 #ifndef __ACPI__
+#ifndef __ASSEMBLY__
 
 #include <acpi/acpi_table.h>
 
@@ -109,7 +110,51 @@ int acpi_pptt_add_cache(struct acpi_ctx *ctx, const u32 flags,
 			const u32 sets, const u8 assoc, const u8 attributes,
 			const u16 line_size);
 
+/* Multi-processor Startup for ARM Platforms */
+struct acpi_parking_protocol_page {
+	u64 cpu_id;
+	u64 jumping_address;
+	u8 os_reserved[2032];
+	u8 cpu_spinning_code[2048];
+} __packed;
+
+/* Architecture specific functions */
+/**
+ * acpi_pp_code_size - Spinloop code size *
+ */
+extern u16 acpi_pp_code_size;
+
+/**
+ * acpi_pp_tables - Start of ACPI PP tables.
+ */
+extern u64 acpi_pp_tables;
+
+/**
+ * acpi_pp_etables - End of ACPI PP tables.
+ */
+extern u64 acpi_pp_etables;
+
+/**
+ * acpi_pp_code_start() - Spinloop code
+ *
+ * Architectural spinloop code to be installed in each parking protocol
+ * page. The spinloop code must be less than 2048 bytes.
+ *
+ * The spinloop code will be entered after calling
+ * acpi_parking_protocol_install().
+ *
+ */
+void acpi_pp_code_start(void);
+
 #endif /* !__ASSEMBLY__ */
 #endif /* !__ACPI__ */
+
+#define ACPI_PP_CPU_ID_INVALID		0xffffffff
+#define ACPI_PP_JMP_ADR_INVALID		0
+#define ACPI_PP_PAGE_SIZE		4096
+#define ACPI_PP_CPU_ID_OFFSET		0
+#define ACPI_PP_CPU_JMP_ADDR_OFFSET	8
+#define ACPI_PP_CPU_CODE_OFFSET		2048
+#define ACPI_PP_VERSION			1
 
 #endif /* __ASM_ACPI_TABLE_H__ */
