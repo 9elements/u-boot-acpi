@@ -10,7 +10,15 @@
 #include <acpi/acpigen.h>
 #include <acpi/acpi_device.h>
 #include <acpi/acpi_table.h>
+#include <asm-generic/io.h>
+#include <bloblist.h>
+#include <cpu_func.h>
+#include <efi_loader.h>
+#include <linux/log2.h>
+#include <linux/sizes.h>
+#include <malloc.h>
 #include <string.h>
+#include <tables_csum.h>
 
 void acpi_write_madt_gicc(struct acpi_madt_gicc *gicc, uint cpu_num,
 			  uint perf_gsiv, ulong phys_base, ulong gicv,
@@ -111,4 +119,119 @@ int acpi_pptt_add_cache(struct acpi_ctx *ctx, const u32 flags,
 	acpi_inc(ctx, cache->hdr.length);
 
 	return offset;
+}
+
+/**
+ * acpi_write_pp_setup_one_page() - Fill out one page used by the PP
+ *
+ * Fill out the struct acpi_parking_protocol_page to contain the spin-loop
+ * code and the mailbox area. After this function the page is ready for
+ * the secondary core's to enter the spin-loop code.
+ *
+ * @page:                 Pointer to current parking protocol page
+ * @gicc:                 Pointer to corresponding GICC sub-table
+ */
+static void acpi_write_pp_setup_one_page(struct acpi_parking_protocol_page *page,
+					 struct acpi_madt_gicc *gicc)
+{
+	void *reloc_addr;
+
+	/* Update GICC. Mark parking protocol as available. */
+	gicc->parking_proto = ACPI_PP_VERSION;
+	gicc->parked_addr = virt_to_phys(page);
+
+	/* Prepare parking protocol page */
+	memset(page, '\0', sizeof(struct acpi_parking_protocol_page));
+
+	/* Init mailbox. Set MPIDR so core's will find their page. */
+	page->cpu_id = gicc->mpidr;
+	page->jumping_address = ACPI_PP_JMP_ADR_INVALID;
+
+	/* Relocate spinning code */
+	reloc_addr = &page->cpu_spinning_code[0];
+
+	debug("Relocating spin table from %p to %p (size %x)\n",
+	      &acpi_pp_code_start, reloc_addr, acpi_pp_code_size);
+	memcpy(reloc_addr, &acpi_pp_code_start, acpi_pp_code_size);
+
+	if (!CONFIG_IS_ENABLED(SYS_DCACHE_OFF))
+		flush_dcache_range((unsigned long)page,
+				   (unsigned long)(page + 1));
+}
+
+void acpi_write_parking_protocol(struct acpi_madt *madt)
+{
+	struct acpi_parking_protocol_page *start, *page;
+	struct acpi_madt_gicc *gicc;
+	int ncpus = 0;
+
+	/* According to the "Multi-processor Startup for ARM Platforms":
+	 * - Every CPU as specified by MADT GICC has it's own 4K page
+	 * - Every page is divided into two sections: OS and FW reserved
+	 * - Memory occupied by "Parking Protocol" must be marked 'Reserved'
+	 * - Spinloop code should reside in FW reserved 2048 bytes
+	 * - Spinloop code will check the mailbox in OS reserved area
+	 */
+
+	if (acpi_pp_code_size > sizeof(page->cpu_spinning_code)) {
+		log_err("Spinning code too big to fit: %d\n",
+			acpi_pp_code_size);
+		return;
+	}
+
+	/* Count all MADT GICCs including BSP */
+	for (int i = sizeof(struct acpi_madt); i < madt->header.length;
+	     i += gicc->length) {
+		gicc = (struct acpi_madt_gicc *)((void *)madt + i);
+		if (gicc->type != ACPI_APIC_GICC)
+			continue;
+		ncpus++;
+	}
+	debug("Found %d GICCs in MADT\n", ncpus);
+
+	/* Allocate pages linearly due to assembly code requirements */
+	if (IS_ENABLED(CONFIG_BLOBLIST_TABLES)) {
+		start = bloblist_add(BLOBLISTT_ACPI_PP, ACPI_PP_PAGE_SIZE * ncpus,
+				     ilog2(SZ_4K));
+	} else {
+		start = memalign(ACPI_PP_PAGE_SIZE, ACPI_PP_PAGE_SIZE * ncpus);
+	}
+	if (!start) {
+		log_err("Failed to allocate memory for ACPI parking protocol pages\n");
+		return;
+	}
+	log_debug("Allocated parking protocol at %p\n", start);
+	page = start;
+
+	if (IS_ENABLED(CONFIG_EFI_LOADER)) {
+		/* Default mapping is 'BOOT CODE'. Mark as reserved instead. */
+		int ret = efi_add_memory_map((u64)(uintptr_t)start,
+					     ncpus * ACPI_PP_PAGE_SIZE,
+					     EFI_RESERVED_MEMORY_TYPE);
+
+		if (ret != EFI_SUCCESS)
+			log_err("Reserved memory mapping failed addr %p size %x\n",
+				start, ncpus * ACPI_PP_PAGE_SIZE);
+	}
+
+	/* Prepare the parking protocol pages */
+	for (int i = sizeof(struct acpi_madt); i < madt->header.length;
+	     i += gicc->length) {
+		gicc = (struct acpi_madt_gicc *)((void *)madt + i);
+		if (gicc->type != ACPI_APIC_GICC)
+			continue;
+
+		acpi_write_pp_setup_one_page(page++, gicc);
+	}
+
+	acpi_pp_etables = virt_to_phys(start) +
+			  ACPI_PP_PAGE_SIZE * ncpus;
+	acpi_pp_tables = virt_to_phys(start);
+
+	/* Make sure other cores see written value in memory */
+	flush_dcache_all();
+
+	/* Send an event to wake up the secondary CPU. */
+	asm("dsb	ishst\n"
+	    "sev");
 }
