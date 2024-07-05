@@ -9,6 +9,7 @@
 #include <cpu_func.h>
 #include <init.h>
 #include <dm/device.h>
+#include <dm/uclass.h>
 #include <fdt_support.h>
 #include <asm/global_data.h>
 
@@ -199,6 +200,15 @@ int mach_cpu_init(void)
 					       "brcm,bcm2712-pm");
 	if (offset > soc)
 		rpi_wdog_base = fdt_get_base_address(gd->fdt_blob, offset);
+	return 0;
+}
+
+int arch_early_init_r(void)
+{
+	/* The older RPis do not have a CPU driver yet,
+	 * thus do not check for errors here...
+	 */
+	uclass_probe_all(UCLASS_CPU);
 
 	return 0;
 }
