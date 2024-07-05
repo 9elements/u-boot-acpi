@@ -10,6 +10,7 @@
 #include <cpu_func.h>
 #include <init.h>
 #include <dm/device.h>
+#include <dm/uclass.h>
 #include <fdt_support.h>
 #include <asm/global_data.h>
 #include <malloc.h>
@@ -201,7 +202,14 @@ int mach_cpu_init(void)
 					       "brcm,bcm2712-pm");
 	if (offset > soc)
 		rpi_wdog_base = fdt_get_base_address(gd->fdt_blob, offset);
+	return 0;
+}
 
+int arch_early_init_r(void)
+{
+	struct udevice *dev;
+
+	uclass_first_device(UCLASS_CPU, &dev);
 	return 0;
 }
 
