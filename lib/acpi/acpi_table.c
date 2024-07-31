@@ -527,3 +527,82 @@ static int acpi_write_spcr(struct acpi_ctx *ctx, const struct acpi_writer *entry
 }
 
 ACPI_WRITER(5spcr, "SPCR", acpi_write_spcr, 0);
+
+__weak int acpi_fill_iort(struct acpi_ctx *ctx)
+{
+	return 0;
+}
+
+int acpi_iort_add_named_component(struct acpi_ctx *ctx,
+				  const u32 node_flags,
+				  const u64 memory_properties,
+				  const u8 memory_address_limit,
+				  const char *device_name)
+{
+	struct acpi_iort_node *node;
+	struct acpi_iort_named_component *comp;
+
+	node = ctx->current;
+	memset(node, '\0', sizeof(struct acpi_iort_node));
+
+	node->type = ACPI_IORT_NODE_NAMED_COMPONENT;
+	node->revision = 4;
+	node->length = sizeof(struct acpi_iort_node);
+	node->length += sizeof(struct acpi_iort_named_component);
+	node->length += strlen(device_name) + 1;
+
+	comp = (struct acpi_iort_named_component *)node->node_data;
+
+	comp->node_flags = node_flags;
+	comp->memory_properties = memory_properties;
+	comp->memory_address_limit = memory_address_limit;
+	memcpy(comp->device_name, device_name, strlen(device_name) + 1);
+
+	ctx->current += node->length;
+
+	return 0;
+}
+
+static int acpi_write_iort(struct acpi_ctx *ctx, const struct acpi_writer *entry)
+{
+	struct acpi_table_iort *iort;
+	struct acpi_iort_node *node;
+	int ret;
+
+	iort = ctx->current;
+	memset(iort, '\0', sizeof(struct acpi_table_iort));
+
+	acpi_fill_header(&iort->header, "IORT");
+	iort->header.revision = 1;
+	iort->header.creator_revision = 1;
+	iort->header.length = sizeof(struct acpi_table_iort);
+	iort->node_offset = sizeof(struct acpi_table_iort);
+
+	acpi_inc(ctx, sizeof(struct acpi_table_iort));
+
+	ret = acpi_fill_iort(ctx);
+	if (ret) {
+		ctx->current = iort;
+		return log_msg_ret("fill", ret);
+	}
+
+	/* Count nodes filled in */
+	for (node = (void *)iort + iort->node_offset;
+	     node->length > 0 && (void *)node < ctx->current;
+	     node = (void *)node + node->length)
+		iort->node_count++;
+
+	/* (Re)calculate length and checksum */
+	iort->header.length = ctx->current - (void *)iort;
+	iort->header.checksum = table_compute_checksum((void *)iort, iort->header.length);
+	log_debug("IORT at %p, length %x\n", iort, iort->header.length);
+
+	/* Drop the table if it is empty */
+	if (iort->header.length == sizeof(struct acpi_table_iort))
+		return log_msg_ret("fill", -ENOENT);
+	acpi_add_table(ctx, iort);
+
+	return 0;
+}
+
+ACPI_WRITER(5iort, "IORT", acpi_write_iort, 0);
