@@ -1,0 +1,49 @@
+// SPDX-License-Identifier: GPL-2.0+ OR MIT
+/*
+ * Empty device tree for qemu_arm64
+
+ * Copyright 2021 Google LLC
+ */
+#include "configs/qemu-sbsa.h"
+
+/dts-v1/;
+
+/ {
+	#address-cells = <2>;
+	#size-cells = <2>;
+
+	binman: binman {
+		multiple-images;
+	};
+};
+
+&binman {
+	secure-world {
+		filename = "secure-world.rom";
+		size = <0x10000000>;
+		pad-byte = <0x00>;
+
+		bl1 {
+			offset = <0x0>;
+			description = "ARM Trusted Firmware BL1";
+			filename = "bl1.bin";
+			type = "blob-ext";
+		};
+
+		fip {
+			offset = <0x12000>;
+			description = "ARM Trusted Firmware FIP";
+			filename = "fip.bin";
+			type = "blob-ext";
+		};
+	};
+
+	unsecure-world {
+		filename = "unsecure-world.rom";
+		pad-byte = <0x00>;
+		size = <0x10000000>;
+
+		u-boot {
+		};
+	};
+};
