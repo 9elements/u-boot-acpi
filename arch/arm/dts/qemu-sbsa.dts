@@ -1,0 +1,136 @@
+// SPDX-License-Identifier: GPL-2.0+ OR MIT
+/*
+ * Devicetree with onboard devices for qemu_sbsa-ref for internal use only!
+ * DO NOT PASS TO THE OS!
+ *
+ * As QEMU provides only a minimal devicetree this one is merged with
+ * it and then fixed at runtime.
+ *
+ * Copyright 2024 9elements GmbH
+ */
+#include "configs/qemu-sbsa.h"
+
+/dts-v1/;
+
+#define MAKE_PROP(x) (x>>32) (x&0xffffffff)
+
+/ {
+	#address-cells = <2>;
+	#size-cells = <2>;
+	interrupt-parent = <&intc>;
+	compatible = "linux,sbsa-ref";
+
+	binman: binman {
+		multiple-images;
+	};
+
+	cpus {
+		/* Filled by fdtdec_board_setup() */
+	};
+
+	memory {
+		/* Filled by fdtdec_board_setup() */
+	};
+
+	soc {
+		compatible = "simple-bus";
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		uart0 {
+			compatible = "arm,pl011";
+			status = "okay";
+			reg = <MAKE_PROP(SBSA_UART_BASE_ADDR)
+			       MAKE_PROP(SBSA_UART_LENGTH)>;
+		};
+
+		ahci {
+			compatible = "generic-ahci";
+			status = "okay";
+			reg = <MAKE_PROP(SBSA_AHCI_BASE_ADDR)
+			       MAKE_PROP(SBSA_AHCI_LENGTH)>;
+		};
+
+		xhci {
+			compatible = "generic-xhci";
+			status = "okay";
+			reg = <MAKE_PROP(SBSA_XHCI_BASE_ADDR)
+			       MAKE_PROP(SBSA_XHCI_LENGTH)>;
+		};
+
+		pci {
+			#address-cells = <3>;
+			#size-cells = <2>;
+			compatible = "pci-host-ecam-generic";
+			device_type = "pci";
+			status = "okay";
+			reg = <MAKE_PROP(SBSA_PCIE_ECAM_BASE_ADDR)
+			       MAKE_PROP(SBSA_PCIE_ECAM_LENGTH)>;
+			bus-range = <0 0xff>;
+			ranges = <0x01000000 0 0
+				  MAKE_PROP(SBSA_PIO_BASE_ADDR)
+				  MAKE_PROP(SBSA_PIO_LENGTH)>,
+				 <0x02000000 MAKE_PROP(SBSA_PCIE_MMIO_BASE_ADDR)
+				  MAKE_PROP(SBSA_PCIE_MMIO_BASE_ADDR)
+				  MAKE_PROP(SBSA_PCIE_MMIO_LENGTH)>,
+				 <0x43000000 MAKE_PROP(SBSA_PCIE_MMIO_HIGH_BASE_ADDR)
+				  MAKE_PROP(SBSA_PCIE_MMIO_HIGH_BASE_ADDR)
+				  MAKE_PROP(SBSA_PCIE_MMIO_HIGH_LENGTH)>;
+		};
+	};
+
+	intc: interrupt-controller {
+		compatible = "arm,gic-v3";
+		#interrupt-cells = <1>;
+		status = "okay";
+		interrupt-controller;
+		interrupts = <25>;
+		reg = <MAKE_PROP(SBSA_GIC_DIST_BASE_ADDR)
+			MAKE_PROP(SBSA_GIC_DIST_LENGTH)>,
+			<MAKE_PROP(SBSA_GIC_REDIST_BASE_ADDR)
+			MAKE_PROP(SBSA_GIC_REDIST_LENGTH)>,
+			<0 0 0 0>,
+			<MAKE_PROP(SBSA_GIC_HBASE_ADDR)
+			MAKE_PROP(SBSA_GIC_HBASE_LENGTH)>,
+			<MAKE_PROP(SBSA_GIC_VBASE_ADDR)
+			MAKE_PROP(SBSA_GIC_VBASE_LENGTH)>;
+	};
+
+	its {
+		compatible = "arm,gic-v3-its";
+		status = "disabled";
+	};
+};
+
+&binman {
+	secure-world {
+		filename = "secure-world.rom";
+		size = <SBSA_SECURE_FLASH_LENGTH>;
+
+		bl1 {
+			offset = <0x0>;
+			description = "ARM Trusted Firmware BL1";
+			filename = "bl1.bin";
+			type = "blob-ext";
+		};
+
+		fip {
+			offset = <0x12000>;
+			description = "ARM Trusted Firmware FIP";
+			filename = "fip.bin";
+			type = "blob-ext";
+		};
+	};
+
+	unsecure-world {
+		filename = "unsecure-world.rom";
+		size = <SBSA_FLASH_LENGTH>;
+
+		u-boot {
+		};
+		u-boot-dtb {
+			compress = "lz4";
+		};
+	};
+};
