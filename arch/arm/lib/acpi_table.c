@@ -112,3 +112,10 @@ int acpi_pptt_add_cache(struct acpi_ctx *ctx, const u32 flags,
 
 	return offset;
 }
+
+__weak void *acpi_fill_madt(struct acpi_madt *madt, struct acpi_ctx *ctx)
+{
+	/* TODO: Drop __weak once all SoCs are migrated to driver model */
+	acpi_fill_madt_subtbl(ctx);
+	return ctx->current;
+}
