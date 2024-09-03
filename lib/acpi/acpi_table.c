@@ -249,6 +249,7 @@ int acpi_write_madt(struct acpi_ctx *ctx, const struct acpi_writer *entry)
 	struct acpi_table_header *header;
 	struct acpi_madt *madt;
 	void *current;
+	u32 old_length;
 
 	madt = ctx->current;
 
@@ -261,14 +262,23 @@ int acpi_write_madt(struct acpi_ctx *ctx, const struct acpi_writer *entry)
 	header->revision = ACPI_MADT_REV_ACPI_3_0;
 
 	current = (void *)madt + sizeof(struct acpi_madt);
+	/* TODO: Get rid of acpi_fill_madt */
 	current = acpi_fill_madt(madt, current);
+
+	/* Calculate length */
+	header->length = (uintptr_t)current - (uintptr_t)madt;
+	old_length = header->length;
+	acpi_inc(ctx, madt->header.length);
+
+	acpi_fill_madt_subtbl(ctx);
+	current = ctx->current;
 
 	/* (Re)calculate length and checksum */
 	header->length = (uintptr_t)current - (uintptr_t)madt;
 
 	header->checksum = table_compute_checksum((void *)madt, header->length);
 	acpi_add_table(ctx, madt);
-	acpi_inc(ctx, madt->header.length);
+	acpi_inc(ctx, madt->header.length - old_length);
 
 	return 0;
 }
