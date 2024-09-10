@@ -64,8 +64,35 @@ static int acpi_cpu_fill_ssdt(const struct udevice *dev, struct acpi_ctx *ctx)
 	return 0;
 }
 
+static int acpi_cpu_fill_madt(const struct udevice *dev, struct acpi_ctx *ctx)
+{
+	struct acpi_madt_gicc *gicc;
+	struct cpu_plat *cpu_plat;
+
+	cpu_plat = dev_get_parent_plat(dev);
+	if (!cpu_plat)
+		return 0;
+
+	gicc = ctx->current;
+	acpi_write_madt_gicc(gicc,
+			     cpu_plat->gicc_cpu_if_num,
+			     cpu_plat->gicc_perf_gsiv,
+			     cpu_plat->gicc_phys_base,
+			     cpu_plat->gicc_gicv,
+			     cpu_plat->gicc_gich,
+			     cpu_plat->gicc_vgic_maint_irq,
+			     cpu_plat->gicc_gicr_base,
+			     cpu_plat->gicc_mpidr,
+			     cpu_plat->gicc_efficiency);
+
+	acpi_inc(ctx, gicc->length);
+
+	return 0;
+}
+
 struct acpi_ops armv8_cpu_acpi_ops = {
 	.fill_ssdt	= acpi_cpu_fill_ssdt,
+	.fill_madt	= acpi_cpu_fill_madt,
 };
 #endif
 

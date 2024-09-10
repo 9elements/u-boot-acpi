@@ -13,17 +13,29 @@ struct udevice;
 
 /**
  * struct cpu_plat - platform data for a CPU
- * @cpu_id:	   Platform-specific way of identifying the CPU.
+ * @cpu_id:        Platform-specific way of identifying the CPU.
  * @ucode_version: Microcode version, if CPU_FEAT_UCODE is set
  * @device_id:     Driver-defined device identifier
  * @family:        DMTF CPU Family identifier
  * @id:            DMTF CPU Processor identifier
  * @timebase_freq: the current frequency at which the cpu timer timebase
- *		   registers are updated (in Hz)
+ *                 registers are updated (in Hz)
+ * @gicc_cpu_if_num:     GIC's CPU Interface Number
+ * @gicc_perf_gsiv:      The GSIV used for Performance Monitoring Interrupts
+ * @gicc_phys_base:      Address at which the processor can access this
+ *                       GIC CPU Interface
+ * @gicc_gicv:           Address of the GIC virtual CPU interface registers
+ * @gicc_gich:           Address of the GIC virtual interface control block
+ *                       registers
+ * @gicc_vgic_maint_irq: GSIV for Virtual GIC maintenance interrupt
+ * @gicc_gicr_base:      Physical address of the associated Redistributor
+ * @gicc_mpidr:          MPIDR as defined by ARM architecture
+ * @gicc_efficiency:     Describes the relative power efficiency
  *
  * This can be accessed with dev_get_parent_plat() for any UCLASS_CPU
  * device.
  */
+
 struct cpu_plat {
 	int cpu_id;
 	int ucode_version;
@@ -31,6 +43,17 @@ struct cpu_plat {
 	u16 family;
 	u32 id[2];
 	u32 timebase_freq;
+#if defined(CONFIG_GENERATE_ACPI_TABLE)
+	u32 gicc_cpu_if_num;
+	u32 gicc_perf_gsiv;
+	u64 gicc_phys_base;
+	u64 gicc_gicv;
+	u64 gicc_gich;
+	u32 gicc_vgic_maint_irq;
+	u64 gicc_gicr_base;
+	u64 gicc_mpidr;
+	u8  gicc_efficiency;
+#endif
 };
 
 /* CPU features - mostly just a placeholder for now */
